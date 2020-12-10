@@ -1,3 +1,6 @@
+// uncomment out when it's time to use the actual vdb lib
+// extern crate vdb;
+
 use ::error::{TResult, TError};
 use ::models::model::Model;
 use ::models::board::Board;
@@ -15,6 +18,12 @@ use ::jedi::{self, Value};
 use ::crypto::Key;
 use ::messaging;
 use ::std::default::Default;
+
+// comment out when it's time to use the actual vdb lib
+use ::models::vdb::VDB;
+
+// uncomment out when it's time to use the actual vdb lib
+// use vdb::VDB;
 
 protected! {
     /// Defines a Space, which is a container for notes and boards. It also acts as
@@ -39,6 +48,10 @@ protected! {
         #[serde(skip_serializing_if = "Option::is_none")]
         #[protected_field(private)]
         pub color: Option<String>,
+
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[protected_field(private)]
+        pub vdb: Option<VDB>,
     }
 }
 
@@ -414,4 +427,3 @@ impl Space {
         Ok(())
     }
 }
-

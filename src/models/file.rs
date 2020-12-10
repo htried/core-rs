@@ -205,7 +205,16 @@ impl FileData {
     /// Load a note's file, if we have one.
     pub fn load_file(turtl: &Turtl, note: &Note) -> TResult<Vec<u8>> {
         let note_id = note.id_or_else()?;
-        let note_key = note.key_or_else()?;
+        // get the note's space id
+        let space_id = note::get_space_id()?;
+        // iterate through the spaces in this profile to find the space that contains this note
+        for space in turtl.profile.spaces {
+            if space.id() == space_id {
+                let note_key = space.vdb.query(note_id)?;
+            }
+            break;
+        }
+        // let note_key = note.key_or_else()?;
 
         let filename = FileData::file_finder(None, Some(&note_id))?;
         let enc = {
@@ -230,7 +239,16 @@ impl FileData {
         // filename, note_key for encrypting the file).
         let user_id = turtl.user_id()?;
         let note_id = note.id_or_else()?;
-        let note_key = note.key_or_else()?;
+        // get the note's space id
+        let space_id = note::get_space_id()?;
+        // iterate through the spaces in this profile to find the space that contains this note
+        for space in turtl.profile.spaces {
+            if space.id() == space_id {
+                let note_key = space.vdb.query(note_id)?;
+            }
+            break;
+        }
+        // let note_key = note.key_or_else()?;
 
         // the file id should ref the note
         self.id = Some(note_id.clone());
@@ -357,4 +375,3 @@ mod tests {
         }
     }
 }
-

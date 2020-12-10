@@ -166,6 +166,23 @@ pub fn save_model<T>(action: SyncAction, turtl: &Turtl, model: &mut T, skip_remo
         if action == SyncAction::Add {
             model.generate_id()?;
             model.generate_key()?;
+
+            // if model type is space, set up the vdb for that space
+            if model.model_type() == "space" {
+                model.vdb.setup(model.key(), None)?;
+
+            // if model type is note, get the space id
+            } else if model.model_type() == "note" {
+                let space_id = model.get_space_id()?;
+                // iterate through the spaces in this profile to find the space that contains this note
+                for space in turtl.profile.spaces {
+                    if space.id() == space_id {
+                        // add note to vdb
+                        space.vdb.add(model.key(), model.id())?;
+                    }
+                    break;
+                }
+            }
         } else {
             let got_model = db.get::<T>(model.table(), model.id().expect("turtl::sync_model::save_model() -- model.id() is Nooooooooooone"))?;
             match got_model {
@@ -446,4 +463,3 @@ pub fn dispatch(turtl: &Turtl, sync_record: SyncRecord) -> TResult<Value> {
         }
     }
 }
-

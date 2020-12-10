@@ -7,4 +7,5 @@ config.yaml
 *.stackdump
 *.un~
 /scripts/cross/
-
+libsodium-1.0.16/*
+src/models/vdb.rs

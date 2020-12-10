@@ -19,4 +19,4 @@ pub mod note;
 pub mod file;
 pub mod invite;
 pub mod feedback;
-
+pub mod vdb;

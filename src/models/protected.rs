@@ -77,16 +77,40 @@ pub fn map_deserialize<T>(turtl: &Turtl, vec: Vec<T>) -> TResult<Vec<T>>
             let mut model_clone = ftry!(model.clone());
             let model_type = String::from(model.model_type());
             let model_id = model.id().expect("turtl::protected::map_deserialize() -- mode.id() is None").clone();
-            // run the deserialize, return the result into our future chain
-            let fut = work.run_async(move || model_clone.deserialize())
-                .and_then(move |item_mapped: Value| -> TFutureResult<DeserializeResult<T>> {
-                    ftry!(model.merge_fields(&item_mapped));
-                    FOk!(DeserializeResult::Model(model))
-                })
-                .or_else(move |e| -> TFutureResult<DeserializeResult<T>> {
-                    error!("protected::map_deserialize() -- error deserializing {} model ({:?}): {}", model_type, model_id, e);
-                    FOk!(DeserializeResult::Failed)
-                });
+
+            // if model_type is note,
+            if model_type == "note" {
+                let space_id = model.get_space_id()?;
+
+                // iterate through the spaces in this profile to find the space that contains it
+                for space in turtl.profile.spaces {
+                    if space.id() == space_id {
+                        // when we find the space, run the deserialize as normal and return the
+                        // result into our future chain
+                        let fut = work.run_async(move || model_clone.deserialize(space.vdb))
+                            .and_then(move |item_mapped: Value| -> TFutureResult<DeserializeResult<T>> {
+                                ftry!(model.merge_fields(&item_mapped));
+                                FOk!(DeserializeResult::Model(model))
+                            })
+                            .or_else(move |e| -> TFutureResult<DeserializeResult<T>> {
+                                error!("protected::map_deserialize() -- error deserializing {} model ({:?}): {}", model_type, model_id, e);
+                                FOk!(DeserializeResult::Failed)
+                            });
+                    }
+                    break;
+                }
+            } else {
+                // otherwise run the deserialize normally, return the result into our future chain
+                let fut = work.run_async(move || model_clone.deserialize(None))
+                    .and_then(move |item_mapped: Value| -> TFutureResult<DeserializeResult<T>> {
+                        ftry!(model.merge_fields(&item_mapped));
+                        FOk!(DeserializeResult::Model(model))
+                    })
+                    .or_else(move |e| -> TFutureResult<DeserializeResult<T>> {
+                        error!("protected::map_deserialize() -- error deserializing {} model ({:?}): {}", model_type, model_id, e);
+                        FOk!(DeserializeResult::Failed)
+                    });
+            }
             Box::new(fut)
         })
         .collect::<Vec<_>>();
@@ -308,8 +332,17 @@ pub trait Protected: Model + fmt::Debug {
                 Some(x) => x,
                 None => return TErr!(TError::MissingField(format!("model {} ({}) missing `key`", id, self.model_type()))),
             };
+
+            let key: &Key = vdb.query(id)?;
+            let model_type = model.model_type();
+            // if model_type is "note" and the key isn't already in the vdb, add the key to the vdb
+            if model_type == "note" && !key.is_none() {
+                vdb::add(key, id)
+            };
+
             // government surveillance agencies *HATE* him!!!!1
             body = crypto::encrypt(&key, Vec::from(json.as_bytes()), CryptoOp::new("chacha20poly1305")?)?;
+
         }
         let body_base64 = crypto::to_base64(&body)?;
         self.set_body(body_base64);
@@ -318,7 +351,7 @@ pub trait Protected: Model + fmt::Debug {
 
     /// "DeSerializes" a model...takes the `body` field, decrypts it, and
     /// returns a JSON Value of the public/private fields.
-    fn deserialize(&mut self) -> TResult<Value> {
+    fn deserialize(&mut self, vdb: Option<VDB>) -> TResult<Value> {
         if self.key().is_none() {
             return TErr!(TError::MissingField(format!("model {:?} ({}) missing `key`", self.id(), self.model_type())));
         }
@@ -333,10 +366,21 @@ pub trait Protected: Model + fmt::Debug {
                 Some(x) => crypto::from_base64(x)?,
                 None => return TErr!(TError::MissingField(format!("model {} ({}) missing `body`", id, self.model_type()))),
             };
-            let key: &Key = match self.key() {
-                Some(x) => x,
-                None => return TErr!(TError::MissingField(format!("model {} ({}) missing `key`", id, self.model_type()))),
-            };
+
+            // if there's no vdb (i.e. we did a check in map_deserialize() and this model isn't a
+            // note), then get the key normally
+            if vdb.is_none() {
+                let key: &Key = match self.key() {
+                    Some(x) => x,
+                    None => return TErr!(TError::MissingField(format!("model {} ({}) missing `key`", id, self.model_type()))),
+                };
+            // otherwise this is a note, so query to get the note key from the vdb
+            } else {
+                let key: &Key = match vdb.query(id) {
+                    Some(x) => x,
+                    None => return TErr!(TError::MissingField(format!("model {} ({}) missing `key`", id, self.model_type()))),
+                };
+            }
             crypto::decrypt(key, body)?
         };
         let json_str: String = match String::from_utf8(json_bytes) {
@@ -399,7 +443,7 @@ macro_rules! protected {
                 #[protected_field(public)]
                 keys: Option<Vec<::models::keychain::KeyRef<String>>>,
                 #[protected_field(public)]
-                body: Option<String>, 
+                body: Option<String>,
 
                 $( $inner )*
             }
@@ -614,4 +658,3 @@ mod tests {
         assert!(note.is_err());
     }
 }
-
