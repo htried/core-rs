@@ -577,7 +577,7 @@ impl Turtl {
         //   board:
         //     id: 1234
         //     key: "696969"
-        // 
+        //
         // so our `model` has a key, "b50942fe". this key is encrypted, and the
         // only way to decrypt it is to use the board's key. so in the following
         // search, we look for a key for board 1234 both in our user's global
@@ -685,7 +685,7 @@ impl Turtl {
         }
 
         let mut user_guard = lockw!(self.user);
-        user_guard.deserialize()?;
+        user_guard.deserialize(None)?;
         Ok(())
     }
 
@@ -1136,4 +1136,3 @@ pub mod tests {
         assert_eq!(syncs[1].ty, SyncType::Space);
     }
 }
-

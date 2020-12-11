@@ -18,6 +18,7 @@ use ::models::board::Board;
 use ::models::note::Note;
 use ::models::file::FileData;
 use ::lib_permissions::Permission;
+use ::crypto::{self};
 use ::jedi::{self, Value};
 use ::turtl::Turtl;
 use ::std::mem;
@@ -169,19 +170,28 @@ pub fn save_model<T>(action: SyncAction, turtl: &Turtl, model: &mut T, skip_remo
 
             // if model type is space, set up the vdb for that space
             if model.model_type() == "space" {
-                model.vdb.setup(model.key(), None)?;
+                let profile_guard = lockr!(turtl.profile);
+                for space in profile_guard.spaces {
+                    if space.id().unwrap().to_string() == model.id().unwrap().to_string() {
+                        space.vdb.unwrap().setup(crypto::to_base64(model.key().unwrap().data()).unwrap(), None);
+                        break;
+                    }
+                }
 
             // if model type is note, get the space id
             } else if model.model_type() == "note" {
-                let space_id = model.get_space_id()?;
+                let space_id = Note::get_space_id(turtl, &model.id().unwrap().to_string());
+
+                let profile_guard = lockr!(turtl.profile);
                 // iterate through the spaces in this profile to find the space that contains this note
-                for space in turtl.profile.spaces {
-                    if space.id() == space_id {
+                for space in profile_guard.spaces {
+                    if space.id().unwrap().to_string() == space_id.unwrap() {
                         // add note to vdb
-                        space.vdb.add(model.key(), model.id())?;
+                        space.vdb.unwrap().add(crypto::to_base64(model.key().unwrap().data()).unwrap(), model.id().unwrap().to_string());
                     }
                     break;
                 }
+                drop(profile_guard);
             }
         } else {
             let got_model = db.get::<T>(model.table(), model.id().expect("turtl::sync_model::save_model() -- model.id() is Nooooooooooone"))?;
@@ -432,7 +442,7 @@ pub fn dispatch(turtl: &Turtl, sync_record: SyncRecord) -> TResult<Value> {
                             None => return TErr!(TError::MissingData(format!("cannot find Board {} in profile", item_id))),
                         };
                         turtl.find_model_key(&mut board)?;
-                        board.deserialize()?;
+                        board.deserialize(None)?;
                         board
                     };
                     board.move_spaces(turtl, to_space_id)?;

@@ -186,7 +186,7 @@ fn do_login(turtl: &Turtl, username: &String, key: Key, auth: String) -> TResult
     let userdata: Value = turtl.api.get(url.as_str())?.call()?;
     let mut user_guard = lockw!(turtl.user);
     user_guard.merge_fields(&userdata)?;
-    user_guard.deserialize()?;
+    user_guard.deserialize(None)?;
     debug!("user::do_login() -- auth success, logged in");
     Ok(())
 }
@@ -281,7 +281,7 @@ impl User {
         user_guard_w.merge_fields(jedi::walk(&["data"], &joindata)?)?;
         user_guard_w.id = Some(user_id);
         user_guard_w.do_login(key, auth);
-        user_guard_w.deserialize()?;
+        user_guard_w.deserialize(None)?;
         drop(user_guard_w);
 
         debug!("user::join() -- auth success, joined and logged in");
@@ -507,7 +507,7 @@ impl User {
 
         let mut user_guard_w = lockw!(turtl.user);
         user_guard_w.set_setting(turtl, "default_space", &default_space_id)?;
-        user_guard_w.deserialize()?;
+        user_guard_w.deserialize(None)?;
         drop(user_guard_w);
 
         Ok(())

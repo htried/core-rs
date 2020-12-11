@@ -1,3 +1,4 @@
+use ::crypto::{self, Key};
 use ::jedi::Value;
 use ::error::{TResult, TError};
 use ::storage::Storage;
@@ -9,7 +10,6 @@ use ::models::validate::Validate;
 use ::sync::sync_model::{self, SyncModel, MemorySaver};
 use ::turtl::Turtl;
 use ::std::mem;
-use ::crypto;
 use ::util;
 use ::std::fs;
 use ::std::io::prelude::*;
@@ -206,14 +206,19 @@ impl FileData {
     pub fn load_file(turtl: &Turtl, note: &Note) -> TResult<Vec<u8>> {
         let note_id = note.id_or_else()?;
         // get the note's space id
-        let space_id = note::get_space_id()?;
+        let space_id = Note::get_space_id(turtl, &note_id);
+        let note_key = Key::random().unwrap();
+
+        let profile_guard = lockr!(turtl.profile);
         // iterate through the spaces in this profile to find the space that contains this note
-        for space in turtl.profile.spaces {
-            if space.id() == space_id {
-                let note_key = space.vdb.query(note_id)?;
+        for space in profile_guard.spaces {
+            if space.id().unwrap().to_string() == space_id.unwrap() {
+                note_key = Key::new(crypto::from_base64(&space.vdb.unwrap().query(note_id)).unwrap());
             }
             break;
         }
+
+        drop(profile_guard);
         // let note_key = note.key_or_else()?;
 
         let filename = FileData::file_finder(None, Some(&note_id))?;
@@ -240,14 +245,19 @@ impl FileData {
         let user_id = turtl.user_id()?;
         let note_id = note.id_or_else()?;
         // get the note's space id
-        let space_id = note::get_space_id()?;
+        let space_id = Note::get_space_id(turtl, &note_id);
+        let note_key = Key::random().unwrap();
+
+        let profile_guard = lockr!(turtl.profile);
         // iterate through the spaces in this profile to find the space that contains this note
-        for space in turtl.profile.spaces {
-            if space.id() == space_id {
-                let note_key = space.vdb.query(note_id)?;
+        for space in profile_guard.spaces {
+            if space.id().unwrap().to_string() == space_id.unwrap() {
+                note_key = Key::new(crypto::from_base64(&space.vdb.unwrap().query(note_id)).unwrap());
             }
             break;
         }
+
+        drop(profile_guard);
         // let note_key = note.key_or_else()?;
 
         // the file id should ref the note

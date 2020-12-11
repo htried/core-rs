@@ -49,8 +49,7 @@ protected! {
         #[protected_field(private)]
         pub color: Option<String>,
 
-        #[serde(skip_serializing_if = "Option::is_none")]
-        #[protected_field(private)]
+        // #[serde(skip_serializing_if = "Option::is_none")]
         pub vdb: Option<VDB>,
     }
 }
@@ -382,7 +381,7 @@ impl Space {
         // in the turtl.work() thread, but honestly i don't have the energy to
         // deal with all the clones when this is already really close to working
         // so for now it's just going to be inlined.
-        space.deserialize()?;
+        space.deserialize(None)?;
         // save the space locally (along with its key, which will be double-
         // saved because we are paranoid).
         sync_model::save_model(SyncAction::Add, turtl, &mut space, true)?;

@@ -28,6 +28,8 @@ use ::turtl::Turtl;
 use ::models::model::Model;
 use ::crypto::{self, Key, CryptoOp};
 use ::models::keychain::{KeyRef, Keychain};
+use ::models::note::Note;
+use ::models::vdb::VDB;
 
 // -----------------------------------------------------------------------------
 // NOTE: [encrypt|decrypt]_key() do not use async crypto.
@@ -80,11 +82,13 @@ pub fn map_deserialize<T>(turtl: &Turtl, vec: Vec<T>) -> TResult<Vec<T>>
 
             // if model_type is note,
             if model_type == "note" {
-                let space_id = model.get_space_id()?;
+                let space_id = Note::get_space_id(turtl, &model_id);
+                // let box_ = Box::new(BoxFuture);
 
                 // iterate through the spaces in this profile to find the space that contains it
-                for space in turtl.profile.spaces {
-                    if space.id() == space_id {
+                let profile_guard = lockr!(turtl.profile);
+                for space in profile_guard.spaces {
+                    if space.id().unwrap().to_string() == space_id.unwrap() {
                         // when we find the space, run the deserialize as normal and return the
                         // result into our future chain
                         let fut = work.run_async(move || model_clone.deserialize(space.vdb))
@@ -96,9 +100,12 @@ pub fn map_deserialize<T>(turtl: &Turtl, vec: Vec<T>) -> TResult<Vec<T>>
                                 error!("protected::map_deserialize() -- error deserializing {} model ({:?}): {}", model_type, model_id, e);
                                 FOk!(DeserializeResult::Failed)
                             });
+                        let box_ = Box::new(fut);
+                        drop(profile_guard);
+                        return box_;
                     }
-                    break;
                 }
+                return TFutureResult;
             } else {
                 // otherwise run the deserialize normally, return the result into our future chain
                 let fut = work.run_async(move || model_clone.deserialize(None))
@@ -110,8 +117,8 @@ pub fn map_deserialize<T>(turtl: &Turtl, vec: Vec<T>) -> TResult<Vec<T>>
                         error!("protected::map_deserialize() -- error deserializing {} model ({:?}): {}", model_type, model_id, e);
                         FOk!(DeserializeResult::Failed)
                     });
+                return Box::new(fut);
             }
-            Box::new(fut)
         })
         .collect::<Vec<_>>();
     // wait for all our futures to finish. this will return them in order of
@@ -332,14 +339,6 @@ pub trait Protected: Model + fmt::Debug {
                 Some(x) => x,
                 None => return TErr!(TError::MissingField(format!("model {} ({}) missing `key`", id, self.model_type()))),
             };
-
-            let key: &Key = vdb.query(id)?;
-            let model_type = model.model_type();
-            // if model_type is "note" and the key isn't already in the vdb, add the key to the vdb
-            if model_type == "note" && !key.is_none() {
-                vdb::add(key, id)
-            };
-
             // government surveillance agencies *HATE* him!!!!1
             body = crypto::encrypt(&key, Vec::from(json.as_bytes()), CryptoOp::new("chacha20poly1305")?)?;
 
@@ -374,14 +373,14 @@ pub trait Protected: Model + fmt::Debug {
                     Some(x) => x,
                     None => return TErr!(TError::MissingField(format!("model {} ({}) missing `key`", id, self.model_type()))),
                 };
+
+                crypto::decrypt(key, body)?
             // otherwise this is a note, so query to get the note key from the vdb
             } else {
-                let key: &Key = match vdb.query(id) {
-                    Some(x) => x,
-                    None => return TErr!(TError::MissingField(format!("model {} ({}) missing `key`", id, self.model_type()))),
-                };
+                let key = Key::new(crypto::from_base64(&vdb.unwrap().query(id.to_string())).unwrap());
+
+                crypto::decrypt(&key, body)?
             }
-            crypto::decrypt(key, body)?
         };
         let json_str: String = match String::from_utf8(json_bytes) {
             Ok(x) => x,

@@ -154,7 +154,7 @@ impl Invite {
     /// Open a sealed invite
     pub fn open(&mut self, our_pubkey: &Key, our_privkey: &Key, passphrase: Option<String>) -> TResult<()> {
         self.gen_invite_key(passphrase)?;
-        self.deserialize()?;
+        self.deserialize(None)?;
         let message = match self.message.as_ref() {
             Some(x) => x.clone(),
             None => return TErr!(TError::MissingField(String::from("Invite.message"))),
@@ -224,4 +224,3 @@ impl Invite {
         Ok(())
     }
 }
-

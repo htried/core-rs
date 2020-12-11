@@ -433,7 +433,7 @@ pub fn process_incoming_sync(turtl: &Turtl) -> TResult<()> {
                 let mut model: T = jedi::from_val(data)?;
                 if model.should_deserialize_on_mem_update() {
                     turtl.find_model_key(&mut model)?;
-                    model.deserialize()?;
+                    model.deserialize(None)?;
                 }
                 model
             };
@@ -454,5 +454,3 @@ pub fn process_incoming_sync(turtl: &Turtl) -> TResult<()> {
     }
     Ok(())
 }
-
-
