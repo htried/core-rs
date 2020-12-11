@@ -83,7 +83,10 @@ pub fn map_deserialize<T>(turtl: &Turtl, vec: Vec<T>) -> TResult<Vec<T>>
             // if model_type is note,
             if model_type == "note" {
                 let space_id = Note::get_space_id(turtl, &model_id);
-                // let box_ = Box::new(BoxFuture);
+                let box_ = Box::new(TFutureResult<DeserializeResult<T>> {
+                    error!("Test to get this functional");
+                    FOk!(DeserializeResult::Failed)
+                });
 
                 // iterate through the spaces in this profile to find the space that contains it
                 let profile_guard = lockr!(turtl.profile);
@@ -102,10 +105,9 @@ pub fn map_deserialize<T>(turtl: &Turtl, vec: Vec<T>) -> TResult<Vec<T>>
                             });
                         let box_ = Box::new(fut);
                         drop(profile_guard);
-                        return box_;
                     }
                 }
-                return TFutureResult;
+                return box_;
             } else {
                 // otherwise run the deserialize normally, return the result into our future chain
                 let fut = work.run_async(move || model_clone.deserialize(None))
