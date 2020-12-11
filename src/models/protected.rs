@@ -83,10 +83,15 @@ pub fn map_deserialize<T>(turtl: &Turtl, vec: Vec<T>) -> TResult<Vec<T>>
             // if model_type is note,
             if model_type == "note" {
                 let space_id = Note::get_space_id(turtl, &model_id);
-                let box_ = Box::new(TFutureResult<DeserializeResult<T>> {
-                    error!("Test to get this functional");
-                    FOk!(DeserializeResult::Failed)
-                });
+                let box_ = Box::new(work.run_async(move || model_clone.deserialize(None))
+                    .and_then(move |item_mapped: Value| -> TFutureResult<DeserializeResult<T>> {
+                        ftry!(model.merge_fields(&item_mapped));
+                        FOk!(DeserializeResult::Model(model))
+                    })
+                    .or_else(move |e| -> TFutureResult<DeserializeResult<T>> {
+                        error!("protected::map_deserialize() -- error deserializing {} model ({:?}): {}", model_type, model_id, e);
+                        FOk!(DeserializeResult::Failed)
+                    }));
 
                 // iterate through the spaces in this profile to find the space that contains it
                 let profile_guard = lockr!(turtl.profile);
